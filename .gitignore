@@ -1,0 +1,34 @@
+# Logs
+logs/
+
+# Environment files
+.env
+
+#vscode config
+.vscode
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+
+# Streamlit session state
+.streamlit/
+
+# Database backups (if any)
+*.bak
+*.db
+
+#git
+.git
+# Temporary files
+*.tmp
+*.log
+
+# Research log file
+research_log.jsonl
+
+# Output files
+output/
+outputs/
