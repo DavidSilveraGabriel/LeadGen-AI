@@ -20,7 +20,7 @@ from utils import (
     CompanyData,
     EmailData,
     logger,
-    _parse_serper_text_results, #Se importa la funcion
+    _parse_serper_with_llm, #Se importa la funcion
 )
 
 # --- Definición de Herramientas Personalizadas ---
@@ -67,7 +67,7 @@ class InformationExtractorAgent(Agent):
             allow_delegation=False,
             tools=[],
             llm=llm,
-            max_iter=10,
+            max_iter=3,
             memory=True,
         )
         logger.info("InformationExtractorAgent inicializado.")
@@ -215,7 +215,7 @@ class BusinessResearcherAgent(Agent):
             allow_delegation=False,
             tools=tools or [],
             llm=llm,
-            max_iter=15,
+            max_iter=3,
             memory=True,
             step_callback=self._research_logger,
         )
@@ -228,13 +228,14 @@ class BusinessResearcherAgent(Agent):
     ) -> List[Dict[str, Any]]:
         """Investigación empresarial."""
         logger.debug("ENTRANDO a BusinessResearcherAgent.research")
-        logger.debug(f"search_data: {search_data}")
-        logger.debug(f"user_profile: {user_profile}")
+        logger.info(f"search_data: {search_data}")
+        logger.info(f"user_profile: {user_profile}")
 
         search_query = build_research_prompt(search_data, user_profile)
         logger.debug(f"search_query DESPUÉS de build_research_prompt: {search_query}")
 
         results = self._execute_research(search_query, search_data.get("province", "Argentina"))
+        logger.info(f"Resultados de la investigación: {results}")
         logger.debug("FIN de BusinessResearcherAgent.research")
         return results
 
@@ -256,6 +257,8 @@ class BusinessResearcherAgent(Agent):
             logger.debug("Llamando a SerperDevTool...")
             # Busca la herramienta por nombre
             serper_tool = self._get_tool_by_name("SerperDevTool") #Se usa un metodo get
+            logger.info(f"SerperDevTool: {serper_tool}")
+            logger.debug(f"SerperDevTool: {serper_tool}")
             if serper_tool is None:
                 raise ValueError("Herramienta SerperDevTool no encontrada.")
 
@@ -264,7 +267,7 @@ class BusinessResearcherAgent(Agent):
             logger.debug(f"Resultados brutos de Serper: {serper_results}")
 
             if isinstance(serper_results, str):
-                serper_results_json = _parse_serper_text_results(serper_results)
+                serper_results_json = _parse_serper_with_llm(serper_results)
             else:
                 serper_results_json = serper_results
 

@@ -3,6 +3,7 @@ from crewai import LLM
 
 # from agents import InformationExtractorAgent  # Se elimina: No se usa directamente
 from crew import LeadGenerationCrew  # Se importa la Crew
+from agents import InformationExtractorAgent  # Se importa
 from utils import (
     load_environment_variables,
     save_profile_data,
@@ -23,6 +24,29 @@ load_environment_variables()
 # --- Configuración de Streamlit ---
 st.set_page_config(page_title="LeadGen AI", page_icon="🚀", layout="wide")
 
+
+# --- Configuración de LLM ---
+# Se elimina, la configuración del llm ahora se hace desde el YAML/crew.py
+# def get_llm_config():
+#    return LLM(
+#        model="gemini/gemini-2.0-flash-exp", temperature=0.7, api_key=os.getenv("GEMINI_API_KEY")
+#    )
+# llm_config = get_llm_config()
+from crewai import LLM  # Importa LLM
+import os
+
+# Configura el LLM para Gemini *aquí*, usando litellm.
+# ¡MUY IMPORTANTE!  Asegúrate de que tu variable de entorno
+# GEMINI_API_KEY esté configurada correctamente.  Esto ahora se hace en crew.py
+gemini_llm = LLM(
+     model="gemini/gemini-pro",  #  O el modelo que quieras
+     api_key=os.environ.get("GEMINI_API_KEY"), #Usa la api key desde las variables de entorno
+     temperature=0.7, #Ajusta los parametros
+     # max_tokens=4096,  #  Ajusta si es necesario
+     # top_p=1.0,         #  Ajusta si es necesario
+     # frequency_penalty=0.0, # Ajusta
+     # presence_penalty=0.0,  # Ajusta
+ )
 
 # --- Funciones Auxiliares ---
 def run_crewai(
@@ -120,19 +144,29 @@ with st.sidebar:
     if st.button("Procesar Perfil"):
         if profile_text:
             logger.info("Procesando perfil...")
-            result = run_crewai({"profile_text": profile_text}, search_type="profile")
+            # Usa DIRECTAMENTE el InformationExtractorAgent:
+            extractor = InformationExtractorAgent(llm=gemini_llm)  # type: ignore  #Se pasa el llm
+            result = extractor.process_input({"profile_text": profile_text})
+
             if result:
-                if "error" in result[0]:
-                    st.error(f"Error al procesar el perfil: {result[0]['error']}")
-                elif "parsing_success" in result[0] and not result[0]["parsing_success"]:
+                if "error" in result:  #  <--  CORRECCIÓN AQUÍ
+                    st.error(f"Error al procesar el perfil: {result['error']}")
+                elif "parsing_success" in result and not result["parsing_success"]:
                     st.error(
-                        f"Error al procesar el perfil: {result[0].get('error', 'Error desconocido')}"
+                        f"Error al procesar el perfil: {result.get('error', 'Error desconocido')}"
                     )
                 else:
                     st.success("Perfil procesado exitosamente.")
-                    st.json(result[0])
+                    st.json(result)
+                    # Guarda los datos del perfil DESPUÉS de procesarlos exitosamente
+                    try:
+                        validated_profile = UserProfile(**result)
+                        save_profile_data(validated_profile.model_dump())
+                    except ValidationError as e:
+                        st.error(f"Error al validar los datos del perfil: {e}")
+
             else:
-                st.error("Error al procesar el perfil (CrewAI falló).")
+                st.error("Error al procesar el perfil.") #Ya no falla crewai
         else:
             st.warning("Por favor, introduce tu información de perfil.")
 

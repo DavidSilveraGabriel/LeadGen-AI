@@ -10,7 +10,6 @@ import functools
 import time
 import re
 
-
 # --- Configuración de Logging ---
 def setup_logger(name):
     """Configura un logger con formato y handlers."""
@@ -86,7 +85,7 @@ class UserProfile(BaseModel):
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     keywords: List[str] = []
-    summary: Optional[str] = None
+    summary: Optional[str] = None #Se define como Optional[str]
     interests: List[str] = []
     parsing_success: bool = False #Campo que indica si el llm logro parsear bien el texto, sino es falso
 
@@ -266,30 +265,97 @@ def build_email_prompt(company_data: Dict[str, Any], user_profile: Dict[str, Any
         f"Incluye una llamada a la acción (CTA) clara, proponiendo un tema específico para la reunión."
         f"El correo debe estar en formato de texto plano, listo para ser enviado. Evita saludos genéricos, sé directo"
     )
+    logger.debug(f"PROMPT-->{prompt}")
     return prompt
 
 # --- Función para parsear la respuesta de Serper (implementar) ---
+def _parse_serper_with_llm(self, serper_results: str) -> dict:
+    """
+    Parses Serper results using an LLM and returns a structured dictionary.
+    """
+    prompt = f"""
+    You are an expert at extracting information from search engine results.
+    Below are the raw results from a Serper search:
 
-def _parse_serper_text_results(serper_results: str) -> dict:
+    ```text
+    {serper_results}
+    ```
+
+    Your task is to extract the following information from each search result and
+    return it in a JSON format.  Be as precise as possible. If a piece of
+    information is not found, return 'null' for that field.
+
+    Required JSON format:
+
+    ```json
+    {{
+      "organic": [
+        {{
+          "title": "string",
+          "link": "string",
+          "snippet": "string",
+          "source": "string"
+        }},
+        ...
+      ]
+    }}
+    ```
+    If the search results are empty or don't contain relevant information,
+    return:
+    ```json
+    {{
+        "organic": []
+    }}
+    ```
+
+    Additionally, analyze the search results and provide a concise insight (maximum 50 words) summarizing the main trends and findings. Include this insight in a separate "insight" field within the JSON response.
+
+    EXTRA_REQUIRED_FORMAT:
+
+    ```json
+    {{
+      "organic": [
+        {{
+          "title": "string",
+          "link": "string",
+          "snippet": "string",
+          "source": "string"
+        }},
+        ...
+      ],
+        "insight": "string"
+    }}
+    ```
     """
-    Esta función debe parsear la respuesta en texto plano de SerperDevTool
-    y convertirla a un diccionario. La implementación exacta dependerá del
-    formato de la respuesta de Serper.
-    """
+ 
     try:
-        # Aquí va la lógica para extraer los datos relevantes.
-        # Esto es un placeholder, necesitas la estructura real.
-        # Podría usar expresiones regulares, o buscar patrones específicos.
-        data = {}  # Inicializa un diccionario vacío
+        response = self.llm.call(prompt)
+        logger.debug(f"LLM response (Serper parsing):\n{response}")
+        response = response.strip()
+        if response.startswith("\ufeff"): #Soluciona el error BOM
+            response = response.lstrip("\ufeff")
 
-        # Ejemplo MUY básico (asumiendo que la respuesta es JSON-like):
-        cleaned_results = serper_results.strip().replace("```json", "").replace("```", "")
-        data = json.loads(cleaned_results)
+        response = response.replace("```json", "").replace("```", "").strip() #Limpiamos la respuesta
+        logger.debug(f"Cleaned LLM response:\n{response}")
+        data = json.loads(response)
 
-        return data
+        # Validate structure
+        if not isinstance(data, dict):
+            raise ValueError("LLM did not return a dictionary.")
+        if "organic" not in data :
+            if "error" in data:  # Handle possible errors passed from LLM
+                return data
+            else:
+               return {"organic": [], "insight": None, "error": "LLM output did not contain an 'organic' key."}
+        if not isinstance(data["organic"], list):
+            return {"organic": [], "insight": None, "error": "LLM output 'organic' key is not a list."}
+
+        return data  # Return the parsed and validated JSON
+
     except json.JSONDecodeError as e:
-        logger.error(f"Error al decodificar JSON de Serper: {e}. Respuesta:\n{serper_results}")
-        return {"error": "Respuesta de Serper no es JSON válido."}
+        logger.error(f"Error decoding LLM response as JSON: {e}.  Response:\n{response}")
+        return {"organic": [], "insight":None, "error": f"LLM response is not valid JSON: {str(e)}"}
+
     except Exception as e:
-        logger.error(f"Error al parsear resultados de Serper: {e}")
-        return {"error": "Error desconocido al parsear resultados de Serper."}
+        logger.exception(f"Unexpected error parsing Serper results with LLM: {e}")
+        return {"organic": [], "insight":None, "error": f"Unexpected error: {str(e)}"}
