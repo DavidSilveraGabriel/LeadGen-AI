@@ -3,6 +3,7 @@ research_business_task:
     Conduct detailed research on companies in {province}, Argentina, within the {industry} sector.
     Identify companies that could benefit from services related to: {user_keywords}.
     Prioritize companies that explicitly mention a need for these services or have related activities.
+    If a company name is provided ({company_name}), focus specifically on that company.
     Gather the following information:
       - Company Name
       - Website (valid URL)
@@ -12,7 +13,7 @@ research_business_task:
     A list of dictionaries, where each dictionary contains validated and enriched data
     for a single company, including contact information.
   agent: business_researcher
-
+  
 create_sales_email_task:
   description: >
     Create a highly personalized sales email for the target company.

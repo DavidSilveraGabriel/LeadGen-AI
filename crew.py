@@ -1,3 +1,4 @@
+#crew.py
 from crewai import Crew, Task, LLM, Process
 from crewai.project import CrewBase, agent, task
 from agents import (
@@ -12,10 +13,10 @@ from pydantic import BaseModel, Field
 
 # Configura el LLM para Gemini
 gemini_llm = LLM(
-    model="gemini/gemini-pro",  # O el modelo que quieras
+    model="gemini/gemini-2.0-flash-exp",  # O el modelo que quieras
     api_key=os.environ.get("GEMINI_API_KEY"),
     temperature=0.6,
-)
+) # gemini-2.0-flash-lite-preview-02-05, gemini-2.0-flash-exp, gemini-1.5-pro-latest
 
 @CrewBase
 class LeadGenerationCrew:

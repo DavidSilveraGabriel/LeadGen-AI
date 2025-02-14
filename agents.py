@@ -115,6 +115,9 @@ class BusinessResearcherAgent(Agent):
             else:
                 logger.error(f"Tipo de respuesta inesperado de Serper: {type(serper_results)}")
                 return []
+            
+            
+            logger.debug(f"Serper results (JSON): {serper_results_json}") # NUEVO
 
             # 3. Extraer URLs y verificar que 'organic' exista
             urls_to_scrape = []

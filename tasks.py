@@ -1,4 +1,4 @@
-# tasks.py (MODIFICADO - Tareas más independientes)
+# tasks.py  
 from crewai import Agent, Task
 from typing import Dict, Any
 from utils import logger

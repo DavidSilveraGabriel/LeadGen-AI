@@ -1,3 +1,4 @@
+#utils.py
 import os
 from dotenv import load_dotenv
 from typing import Optional, Dict, Any, List, Callable, TypeVar
@@ -248,12 +249,25 @@ def build_research_prompt(search_data: Dict[str, Any], user_profile: Dict[str, A
     province = search_data.get('province', 'Argentina')
     keywords = ", ".join(user_profile.get('keywords', []))
 
-    # Prompt MAS DECLARATIVO y enfocado en la BÚSQUEDA
     prompt = (
         f"Encuentra sitios web de {industry} en {province}, Argentina, "
         f"que mencionen explícitamente la necesidad o el uso de servicios relacionados con: {keywords}. "
         f"Prioriza resultados que indiquen una necesidad activa de estos servicios."
     )
+    #Agregados
+    if search_data.get('company_name'):
+      prompt += f" Considera especialmente si el nombre de la empresa es {search_data.get('company_name')}"
+    if search_data.get('company_size'):
+        prompt += f" Considera empresas de tamaño: {search_data.get('company_size')}."
+    if search_data.get('revenue'):
+        prompt += f" Considera empresas con facturación anual en el rango: {search_data.get('revenue')}."
+    if search_data.get('location'):
+        prompt += f" La empresa debe estar localizada, o tener sede/oficina en: {search_data.get('location')}."
+    if search_data.get('technologies'):
+        techs = ", ".join(search_data.get('technologies'))
+        prompt += f" Considera si la empresa utiliza, o menciona explicitamente las siguientes tecnologias: {techs}."
+    if search_data.get('needs'):
+      prompt += f" Busca empresas que tengan las siguientes necesidades: {search_data.get('needs')}."
 
     logger.debug(f"PROMPT-->{prompt}")
     logger.debug("FIN de build_research_prompt")
