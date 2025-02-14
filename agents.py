@@ -14,18 +14,16 @@ from utils import (
     save_lead,
     check_lead_exists,
     search_lead,
-    build_research_prompt,  # Se usara dentro de tasks.yaml
+    build_research_prompt,
     build_email_prompt,
     UserProfile,
     CompanyData,
     EmailData,
     logger,
-    _parse_serper_with_llm, #Se importa la funcion
 )
 
 # --- Definición de Herramientas Personalizadas ---
-
-
+# (Estas herramientas no se usan directamente, pero las dejo por si las necesitas en el futuro)
 class CheckLeadExistsTool(BaseTool):
     name: str = "Check Lead Exists"
     description: str = "Verifica si un lead ya existe en la base de datos."
@@ -53,159 +51,12 @@ class SearchLeadTool(BaseTool):
 
 
 # --- Agentes ---
-
-
-class InformationExtractorAgent(Agent):
-    """Agente experto en procesamiento de información."""
-
-    def __init__(self, llm=None):  # Añade un __init__ vacío, o con llm como opcional
-        super().__init__(
-            role="Experto en Procesamiento de Información",
-            goal="Analizar y estructurar datos de entrada, incluyendo información personal y del perfil.",
-            backstory="Especialista en análisis de datos y extracción de información de perfiles.",
-            verbose=True,
-            allow_delegation=False,
-            tools=[],
-            llm=llm,
-            max_iter=3,
-            memory=True,
-        )
-        logger.info("InformationExtractorAgent inicializado.")
-
-    def process_input(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Procesa la entrada, extrayendo información del perfil o datos de búsqueda."""
-        logger.debug(f"Procesando input: {input_data}")
-
-        if "profile_text" in input_data:
-            return self._process_profile(input_data["profile_text"])
-        elif all(key in input_data for key in ["industry", "province"]):
-            return {
-                "industry": input_data["industry"],
-                "province": input_data["province"],
-                "search_type": "automated",
-            }
-        elif any(key in input_data for key in ["company_name", "keywords"]):
-            return {
-                "company_name": input_data.get("company_name"),
-                "keywords": input_data.get("keywords", []),
-                "province": input_data.get("province"),
-                "search_type": "manual",
-            }
-        else:
-            logger.warning("Datos de entrada insuficientes para InformationExtractorAgent.")
-            return {"error": "Datos de entrada insuficientes."}
-
-    def _process_profile(self, profile_text: str) -> Dict[str, Any]:
-        """Extrae información detallada del texto del perfil."""
-        prompt = f"""
-        Extrae la siguiente información del perfil proporcionado.  Sé EXTREMADAMENTE preciso
-        con el formato.  Si un dato no está presente, devuelve 'null'.  Devuelve
-        la información *sin* saltos de línea adicionales, solo texto plano en los valores.
-
-        Texto del Perfil:
-        ```
-        {profile_text}
-        ```
-
-        Formato de Salida (JSON, estrictamente):
-        ```json
-        {{
-        "name": "Nombre Completo",
-        "age": "Edad (solo el número, o 'null')",
-        "company_name": "Nombre de la Empresa (o 'null')",
-        "role": "Título/Cargo (o 'null')",
-        "website": "Sitio Web (o 'null')",
-        "phone": "Número de Teléfono (o 'null')",
-        "email": "string",
-        "keywords": ["palabra1", "palabra2", ...],  // Lista de palabras clave, separadas por comas
-        "summary": "Resumen en tono EMPRESARIAL, máximo 4 líneas, SIN saltos de línea adicionales",
-        "interests": ["interes1", "interes2", ...]  // Lista de intereses, separados por comas,
-        "parsing_success": true
-        }}
-        ```
-        """
-        logger.debug(f"Enviando prompt al LLM (process_profile):\n{prompt}")
-
-        try:
-            response = self.llm.call(prompt)
-            logger.debug(f"Respuesta del LLM (process_profile):\n{response}")
-
-            if (
-                not response
-                or response is None
-                or not isinstance(response, str)
-                or response.strip() == ""
-            ):
-                logger.error("Respuesta del LLM vacía o inválida.")
-                return {
-                    "error": "Respuesta del LLM vacía o inválida.",
-                    "parsing_success": False,
-                }
-
-            parsed_data = self._parse_profile_response(response)
-            return parsed_data
-
-        except Exception as e:
-            logger.error(f"Error al procesar el perfil con el LLM: {e}", exc_info=True)
-            return {"error": str(e), "parsing_success": False}
-
-    def _parse_profile_response(self, response: str) -> Dict[str, Any]:
-        """Parsea la respuesta JSON del LLM, robusto a variaciones."""
-        logger.debug(f"Parseando respuesta del LLM (perfil):\n{response}")
-        result = {
-            "parsing_success": False,
-            "name": None,
-            "age": None,
-            "company_name": None,
-            "role": None,
-            "website": None,
-            "phone": None,
-            "email": None,
-            "keywords": [],
-            "summary": None,
-            "interests": [],
-        }
-        try:
-            response = response.strip()
-            if response.startswith("\ufeff"):
-                response = response.lstrip("\ufeff")
-
-            response = response.replace("```json", "").replace("```", "").strip()
-
-            data = json.loads(response)
-            result.update(data)
-            result["parsing_success"] = True
-
-        except json.JSONDecodeError as e:
-            logger.warning(
-                f"JSONDecodeError: {e}.  La respuesta no es JSON válido. Respuesta:\n{response}"
-            )
-            result["error"] = str(e)
-            return result
-
-        except Exception as e:
-            logger.error(f"Error al parsear la respuesta del perfil: {e}", exc_info=True)
-            result["error"] = str(e)
-            return result
-
-        try:  # Line 192 in your snippet
-            if result["age"] is not None and not isinstance(result["age"], int):
-                result["age"] = int(result["age"]) if str(result["age"]).isdigit() else None
-        except ValueError as e:
-            logger.warning(f"ValueError during age conversion: {e}. Age set to None.")
-            result["age"] = None
-        except Exception as e:
-            logger.error(f"Unexpected error during age validation: {e}", exc_info=True)
-            result["error"] = "Error validating age"
-            return result
-
-        return result
-
+# information_extractor ya no se usa.
 
 class BusinessResearcherAgent(Agent):
     """Agente de investigación empresarial."""
-    serper_tool: SerperDevTool = SerperDevTool()  # Define como atributo de clase
-    scrape_tool: ScrapeWebsiteTool = ScrapeWebsiteTool()  # Define como atributo
+
+    # Las herramientas se pasan como argumento al inicializar
     def __init__(self, tools: List[BaseTool] = None, llm=None):
         super().__init__(
             role="Investigador Empresarial Senior",
@@ -213,15 +64,14 @@ class BusinessResearcherAgent(Agent):
             backstory="Experto en inteligencia empresarial.",
             verbose=True,
             allow_delegation=False,
-            tools=tools or [],
+            tools=tools or [],  # Usa las herramientas que se le pasen (o una lista vacía)
             llm=llm,
-            max_iter=3,
+            max_iter=7,  # Aumenta las iteraciones máximas
             memory=True,
             step_callback=self._research_logger,
         )
         logger.info("BusinessResearcherAgent inicializado.")
-        #self.serper_tool = SerperDevTool() Se definen como propiedades
-        #self.scrape_tool = ScrapeWebsiteTool()
+
 
     def research(
         self, search_data: Dict[str, Any], user_profile: Dict[str, Any]
@@ -232,6 +82,7 @@ class BusinessResearcherAgent(Agent):
         logger.info(f"user_profile: {user_profile}")
 
         search_query = build_research_prompt(search_data, user_profile)
+        
         logger.debug(f"search_query DESPUÉS de build_research_prompt: {search_query}")
 
         results = self._execute_research(search_query, search_data.get("province", "Argentina"))
@@ -239,122 +90,124 @@ class BusinessResearcherAgent(Agent):
         logger.debug("FIN de BusinessResearcherAgent.research")
         return results
 
-    def _get_tool_by_name(self, tool_name: str) -> Optional[BaseTool]:
-        """Obtiene una herramienta por su nombre."""
-        for tool in self.tools:
-            if tool.name == tool_name:
-                return tool
-        return None
 
     def _execute_research(self, query: str, province: str) -> List[Dict[str, Any]]:
         """Ejecuta la investigación y devuelve una lista de datos de empresas."""
-        logger.debug(f"Ejecutando investigación con consulta: {query}, provincia: {province}")
+        logger.debug(f"Ejecutando investigación con consulta: '{query}', provincia: '{province}'")
         company_data_list = []
         MAX_COMPANIES = 5
 
         try:
-            # Usa Serper
+            # 1. Usar Serper para buscar.
             logger.debug("Llamando a SerperDevTool...")
-            # Busca la herramienta por nombre
-            serper_tool = self._get_tool_by_name("SerperDevTool") #Se usa un metodo get
-            logger.info(f"SerperDevTool: {serper_tool}")
-            logger.debug(f"SerperDevTool: {serper_tool}")
-            if serper_tool is None:
-                raise ValueError("Herramienta SerperDevTool no encontrada.")
-
-            #Ejecuta la herramienta directamente
-            serper_results = self.serper_tool.run(search_query=query) #se ejecuta la herramienta con la propiedad
+            serper_results = self.tools[0].run(search_query=query)  # SOLUCIÓN: query es una string
             logger.debug(f"Resultados brutos de Serper: {serper_results}")
 
+            # 2. Procesamiento de la respuesta de Serper
             if isinstance(serper_results, str):
-                serper_results_json = _parse_serper_with_llm(serper_results)
-            else:
+                try:
+                    serper_results_json = json.loads(serper_results)
+                except json.JSONDecodeError:
+                    logger.error(f"Error al decodificar JSON de Serper: {serper_results}")
+                    return []
+            elif isinstance(serper_results, dict):
                 serper_results_json = serper_results
+            else:
+                logger.error(f"Tipo de respuesta inesperado de Serper: {type(serper_results)}")
+                return []
 
+            # 3. Extraer URLs y verificar que 'organic' exista
+            urls_to_scrape = []
             if "organic" in serper_results_json:
-                for result in serper_results_json["organic"][:MAX_COMPANIES]:
-                    try:
-                        company_data = self._process_serper_result(result)
-                        if not company_data:
-                            continue
-                        company_data["province"] = province
+               for result in serper_results_json["organic"][:MAX_COMPANIES]:
+                  if result.get("link"):
+                     urls_to_scrape.append(result["link"])
+            else:
+                logger.warning("La respuesta de Serper no contiene resultados orgánicos.")
+                return [] #No encontró resultados
 
-                        if company_data.get("website"):
-                            logger.debug(f"Llamando a ScrapeWebsiteTool con URL: {company_data['website']}")
-                            # Usa ScrapeWebsiteTool
-                            #Busca por nombre
-                            scrape_tool = self._get_tool_by_name("ScrapeWebsiteTool")
-                            if scrape_tool is None:
-                                raise ValueError("Herramienta ScrapeWebsiteTool no encontrada.")
 
-                            scrape_data = self.scrape_tool.run(website_url=company_data["website"]) #Se ejecuta por la propiedad
-                            company_data.update(scrape_data)
-                            if isinstance(company_data.get("about"), list):
-                                company_data["about"] = ". ".join(company_data["about"])
+            # 4. Scrape de cada URL y procesamiento con LLM
+            for url in urls_to_scrape:
+                try:
+                    logger.debug(f"Llamando a ScrapeWebsiteTool con URL: {url}")
+                    scraped_content = self.tools[1].run(website_url=url)
+                    # Limitamos el log para que no sea tan extenso
+                    logger.debug(f"Contenido scrapeado (primeros 500 chars): {scraped_content[:500]}...")
 
-                        try:
-                            validated_data = CompanyData(**company_data).model_dump()
+                    # 5. Usar el LLM para extraer información.
+                    prompt = f"""
+                    De la siguiente página web, extrae la información de contacto
+                    de la empresa, si es que existe.
+                    Si la página web es de una empresa que ofrece servicios de marketing digital,
+                    y en la página se menciona explícitamente el uso de 'ciencia de datos',
+                    'inteligencia artificial', 'IA', 'GenAI', 'agentes de IA',
+                    o servicios relacionados, extrae también el nombre de la empresa,
+                    su sitio web, y una breve descripción de la empresa (máximo 200 caracteres).
+
+                    Si no encuentras alguno de los datos solicitados, devuelve 'null' para ese campo.
+
+                    Página web:
+                    ```
+                    {scraped_content[:6000]}  # Aumenté el límite, pero aún lo limitamos.
+                    ```
+                    Formato de Salida (JSON, estrictamente):
+                    {{
+                        "company_name": "Nombre de la Empresa",
+                        "website": "URL válida del sitio web",
+                        "description": "Breve descripción",
+                        "email": "Correo electrónico (o null)",
+                        "social_media": {{
+                            "linkedin": "URL de LinkedIn (o null)",
+                            "twitter": "URL de Twitter (o null)",
+                            "facebook": "URL de Facebook (o null)",
+                            "instagram": "URL de Instagram (o null)"
+                        }}
+                    }}
+                    """
+
+                    logger.debug(f"Enviando prompt al LLM para extraer datos de: {url}")
+                    response = self.llm.call(prompt)
+                    logger.debug(f"Respuesta del LLM: {response}")
+
+
+                    if response:
+                         try:
+                            response_json = json.loads(response.replace("```json", "").replace("```", "").strip())
+                            response_json["website"] = url  # Asegura que la URL sea la correcta
+                            response_json["source"] = "scrape"
+                            response_json["fecha_consulta"] = datetime.now().isoformat()
+                            response_json["province"] = province
+
+                            # Validación con Pydantic
+                            validated_data = CompanyData(**response_json).model_dump()
                             company_data_list.append(validated_data)
-                        except ValidationError as e:
-                            logger.warning(f"Error de validación para una empresa: {e}")
 
-                    except Exception as e:
-                        logger.error(f"Error al procesar un resultado de Serper: {e}", exc_info=True)
-                        continue
+                         except json.JSONDecodeError:
+                            logger.error(f"Error al decodificar JSON del LLM: {response}")
+                         except ValidationError as e:
+                             logger.warning(f"Error de validación Pydantic: {e}")
+
+                except Exception as e:
+                    logger.exception(f"Error durante el scraping o procesamiento de {url}: {e}")
 
             return company_data_list
 
         except Exception as e:
-            logger.error(f"Error en la investigación: {e}", exc_info=True)
+            logger.exception(f"Error en la investigación: {e}")  # Captura genérica
             return []
-
-    def _process_serper_result(self, result: Dict) -> Optional[Dict]:
-        """Procesa un UNICO resultado de búsqueda."""
-        # Extrae información relevante de un resultado individual de Serper.
-        if not result.get("title") or not result.get("link"):  # Valida que tenga lo minimo
-            return None
-        return {
-            "company_name": result.get("title"),
-            "website": result.get("link"),
-            "about": result.get("snippet"),
-            "source": "serper",
-            "fecha_consulta": datetime.now().isoformat(),
-        }
-
-    def _scrape_website(self, url: str) -> Dict:
-        """Extrae información de un sitio web."""
-        logger.debug(f"Extrayendo información del sitio web: {url}")
-        try:
-            # Busca la herramienta por nombre
-            scrape_tool = self._get_tool_by_name("ScrapeWebsiteTool")
-            if scrape_tool is None:
-                raise ValueError("Herramienta ScrapeWebsiteTool no encontrada.")
-
-            scraped_content = self.scrape_tool.run(website_url=url) #Se llama a la herramienta por su propiedad
-            result = {
-                "email": self._extract_email(scraped_content),
-                "instagram": self._extract_social(scraped_content, "instagram"),
-                "facebook": self._extract_social(scraped_content, "facebook"),
-                "about": self._summarize_content(scraped_content),
-                "source": "scrape",
-            }
-            logger.debug(f"Información extraída del sitio web: {result}")
-            return result
-        except Exception as e:
-            logger.error(f"Error durante el scraping de {url}: {e}", exc_info=True)
-            return {"scrape_error": str(e)}
 
 
     def _extract_email(self, text: str) -> Optional[str]:
-        """Extrae una dirección de correo."""
-        logger.debug(f"Extrayendo email de: {text[:100]}...")
+        """Extrae una dirección de correo (función auxiliar)."""
+        logger.debug(f"Extrayendo email de: {text[:100]}...")  # Log primeros 100 chars
         match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", text)
         result = match.group(0) if match else None
         logger.debug(f"Email encontrado: {result}")
         return result
 
     def _extract_social(self, text: str, platform: str) -> Optional[str]:
-        """Extrae un enlace a red social."""
+        """Extrae un enlace a red social (función auxiliar)."""
         logger.debug(f"Extrayendo enlace de {platform} de: {text[:100]}...")
         if platform == "instagram":
             match = re.search(r"instagram\.com/([a-zA-Z0-9_.]+)", text)
@@ -366,7 +219,6 @@ class BusinessResearcherAgent(Agent):
         result = match.group(0) if match else None
         logger.debug(f"Enlace de {platform} encontrado: {result}")
         return result
-
     def _summarize_content(self, text: str) -> str:
         """Resumen automático usando el LLM."""
         prompt = f"Resume en 200 caracteres: {text[:3000]}"
@@ -389,7 +241,7 @@ class BusinessResearcherAgent(Agent):
                 "result": step_output.return_values,
             }
         except AttributeError:
-            log_entry = {
+             log_entry = {
                 "timestamp": datetime.now().isoformat(),
                 "step": "Error en el paso",
                 "agent": self.role,
@@ -397,7 +249,6 @@ class BusinessResearcherAgent(Agent):
             }
         with open("research_log.jsonl", "a") as log_file:
             log_file.write(json.dumps(log_entry) + "\n")
-
 
 class SalesCopywriterAgent(Agent):
     """Especialista en redacción de ventas."""

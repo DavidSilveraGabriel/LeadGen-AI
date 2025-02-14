@@ -77,17 +77,16 @@ class EmailData(BaseModel):
 
 class UserProfile(BaseModel):
     """Modelo de Pydantic para el perfil del usuario."""
-    name: Optional[str] = None
-    age: Optional[int] = None
-    company_name: Optional[str] = None
-    role: Optional[str] = None
-    website: Optional[HttpUrl] = None
-    phone: Optional[str] = None
-    email: Optional[EmailStr] = None
-    keywords: List[str] = []
-    summary: Optional[str] = None #Se define como Optional[str]
-    interests: List[str] = []
-    parsing_success: bool = False #Campo que indica si el llm logro parsear bien el texto, sino es falso
+    name: str  # Ahora es obligatorio
+    role: str   # Ahora es obligatorio
+    company_name: Optional[str] = None  # Opcional
+    website: Optional[HttpUrl] = None    # Opcional, y validado como URL
+    phone: Optional[str] = None        # Opcional
+    email: EmailStr                    # Obligatorio, y validado como email
+    keywords: List[str] = []          # Lista de strings (opcional)
+    summary: Optional[str] = None      # Opcional
+    interests: List[str] = []        # Lista de strings (opcional)
+    parsing_success: bool = True # Ya no es necesario, siempre True.
 
 # --- Decorador para Reintentos y Manejo de Errores ---
 RT = TypeVar('RT')  # Tipo de retorno genérico
@@ -201,36 +200,7 @@ def load_profile_data(filename: str = "profile_data.json") -> Optional[Dict[str,
 
 
 # --- Funciones de Prompting (NUEVAS) ---
-
-# Usando un diccionario de fragmentos
-def build_research_prompt(search_data: Dict[str, Any], user_profile: Dict[str, Any]) -> str:
-    """Construye el prompt para la búsqueda, combinando datos de búsqueda y perfil."""
-    logger.debug("INICIO de build_research_prompt")
-
-    prompt_fragments = {
-        "base": f"Encuentra empresas en el rubro de {search_data.get('industry', 'empresas')} en {search_data.get('province', 'Argentina')}, Argentina.",
-        "keywords": f"Estas empresas deberían estar relacionadas con: {', '.join(user_profile.get('keywords', []))}.",
-        "summary": f"Considera la siguiente descripción de mis servicios: '{user_profile.get('summary', '')}'.",
-        "instructions": (
-            "Dame información detallada sobre cada empresa, incluyendo: nombre, sitio web (URL válida), "
-            "una breve descripción, y cualquier información de contacto que encuentres (correo electrónico válido, redes sociales)."
-             "Prioriza empresas que mencionen explicitamente la necesidad de servicios relacionados con las palabras clave proporcionadas"
-        ),
-    }
-
-    prompt = " ".join(
-        [
-            prompt_fragments["base"],
-            prompt_fragments["keywords"] if user_profile.get('keywords') else "",
-            prompt_fragments["summary"] if user_profile.get('summary') else "",
-            prompt_fragments["instructions"],
-        ]
-    )
-    logger.debug(f"PROMPT-->{prompt}")
-    logger.debug("FIN de build_research_prompt")
-
-    return prompt
-
+ 
 
 def build_email_prompt(company_data: Dict[str, Any], user_profile: Dict[str, Any]) -> str:
     """Construye el prompt para el correo, MUCHO más específico."""
@@ -267,95 +237,25 @@ def build_email_prompt(company_data: Dict[str, Any], user_profile: Dict[str, Any
     )
     logger.debug(f"PROMPT-->{prompt}")
     return prompt
-
-# --- Función para parsear la respuesta de Serper (implementar) ---
-def _parse_serper_with_llm(self, serper_results: str) -> dict:
-    """
-    Parses Serper results using an LLM and returns a structured dictionary.
-    """
-    prompt = f"""
-    You are an expert at extracting information from search engine results.
-    Below are the raw results from a Serper search:
-
-    ```text
-    {serper_results}
-    ```
-
-    Your task is to extract the following information from each search result and
-    return it in a JSON format.  Be as precise as possible. If a piece of
-    information is not found, return 'null' for that field.
-
-    Required JSON format:
-
-    ```json
-    {{
-      "organic": [
-        {{
-          "title": "string",
-          "link": "string",
-          "snippet": "string",
-          "source": "string"
-        }},
-        ...
-      ]
-    }}
-    ```
-    If the search results are empty or don't contain relevant information,
-    return:
-    ```json
-    {{
-        "organic": []
-    }}
-    ```
-
-    Additionally, analyze the search results and provide a concise insight (maximum 50 words) summarizing the main trends and findings. Include this insight in a separate "insight" field within the JSON response.
-
-    EXTRA_REQUIRED_FORMAT:
-
-    ```json
-    {{
-      "organic": [
-        {{
-          "title": "string",
-          "link": "string",
-          "snippet": "string",
-          "source": "string"
-        }},
-        ...
-      ],
-        "insight": "string"
-    }}
-    ```
-    """
  
-    try:
-        response = self.llm.call(prompt)
-        logger.debug(f"LLM response (Serper parsing):\n{response}")
-        response = response.strip()
-        if response.startswith("\ufeff"): #Soluciona el error BOM
-            response = response.lstrip("\ufeff")
 
-        response = response.replace("```json", "").replace("```", "").strip() #Limpiamos la respuesta
-        logger.debug(f"Cleaned LLM response:\n{response}")
-        data = json.loads(response)
 
-        # Validate structure
-        if not isinstance(data, dict):
-            raise ValueError("LLM did not return a dictionary.")
-        if "organic" not in data :
-            if "error" in data:  # Handle possible errors passed from LLM
-                return data
-            else:
-               return {"organic": [], "insight": None, "error": "LLM output did not contain an 'organic' key."}
-        if not isinstance(data["organic"], list):
-            return {"organic": [], "insight": None, "error": "LLM output 'organic' key is not a list."}
+def build_research_prompt(search_data: Dict[str, Any], user_profile: Dict[str, Any]) -> str:
+    """Construye el prompt para la búsqueda, específico para Serper."""
+    logger.debug("INICIO de build_research_prompt")
 
-        return data  # Return the parsed and validated JSON
+    industry = search_data.get('industry', 'empresas')
+    province = search_data.get('province', 'Argentina')
+    keywords = ", ".join(user_profile.get('keywords', []))
 
-    except json.JSONDecodeError as e:
-        logger.error(f"Error decoding LLM response as JSON: {e}.  Response:\n{response}")
-        return {"organic": [], "insight":None, "error": f"LLM response is not valid JSON: {str(e)}"}
+    # Prompt MAS DECLARATIVO y enfocado en la BÚSQUEDA
+    prompt = (
+        f"Encuentra sitios web de {industry} en {province}, Argentina, "
+        f"que mencionen explícitamente la necesidad o el uso de servicios relacionados con: {keywords}. "
+        f"Prioriza resultados que indiquen una necesidad activa de estos servicios."
+    )
 
-    except Exception as e:
-        logger.exception(f"Unexpected error parsing Serper results with LLM: {e}")
-        return {"organic": [], "insight":None, "error": f"Unexpected error: {str(e)}"}
+    logger.debug(f"PROMPT-->{prompt}")
+    logger.debug("FIN de build_research_prompt")
+
+    return prompt

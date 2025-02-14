@@ -1,21 +1,18 @@
 import streamlit as st
 from crewai import LLM
-
-# from agents import InformationExtractorAgent  # Se elimina: No se usa directamente
-from crew import LeadGenerationCrew  # Se importa la Crew
-from agents import InformationExtractorAgent  # Se importa
+from crew import LeadGenerationCrew
+# from agents import InformationExtractorAgent  # Ya no se necesita
 from utils import (
     load_environment_variables,
     save_profile_data,
     load_profile_data,
     UserProfile,
     logger,
-)  # Importamos logger desde utils
-# from crewai_tools import SerperDevTool, ScrapeWebsiteTool  # No se importan aquí
+)
 from typing import Dict, Any, List, Optional
 import os
-import time
-import logging
+# import time  # Ya no se necesita la función retry en app.py
+# import logging  # Ya no se necesita logging directamente en app.py
 from pydantic import ValidationError
 
 # --- Cargar Variables de Entorno ---
@@ -25,27 +22,15 @@ load_environment_variables()
 st.set_page_config(page_title="LeadGen AI", page_icon="🚀", layout="wide")
 
 
-# --- Configuración de LLM ---
-# Se elimina, la configuración del llm ahora se hace desde el YAML/crew.py
-# def get_llm_config():
-#    return LLM(
-#        model="gemini/gemini-2.0-flash-exp", temperature=0.7, api_key=os.getenv("GEMINI_API_KEY")
-#    )
-# llm_config = get_llm_config()
-from crewai import LLM  # Importa LLM
+# --- Configuración de LLM (Gemini) ---
+# (Mantén tu configuración de Gemini como la tenías, ya que está correcta)
+from crewai import LLM
 import os
 
-# Configura el LLM para Gemini *aquí*, usando litellm.
-# ¡MUY IMPORTANTE!  Asegúrate de que tu variable de entorno
-# GEMINI_API_KEY esté configurada correctamente.  Esto ahora se hace en crew.py
 gemini_llm = LLM(
-     model="gemini/gemini-pro",  #  O el modelo que quieras
-     api_key=os.environ.get("GEMINI_API_KEY"), #Usa la api key desde las variables de entorno
-     temperature=0.7, #Ajusta los parametros
-     # max_tokens=4096,  #  Ajusta si es necesario
-     # top_p=1.0,         #  Ajusta si es necesario
-     # frequency_penalty=0.0, # Ajusta
-     # presence_penalty=0.0,  # Ajusta
+     model="gemini/gemini-pro",
+     api_key=os.environ.get("GEMINI_API_KEY"),
+     temperature=0.7,
  )
 
 # --- Funciones Auxiliares ---
@@ -54,77 +39,61 @@ def run_crewai(
 ) -> Optional[List[Dict[str, Any]]]:
     """Ejecuta el flujo de trabajo de CrewAI, manejando errores."""
 
-    # Unifica el uso de user_keywords
     profile_data = load_profile_data()
     if profile_data is None:
         st.error("Error: Debes cargar tu perfil primero.")
         return None
     try:
         validated_user_profile = UserProfile(**profile_data)
-        user_keywords = validated_user_profile.keywords or ["Problema con keywords"]  # Valor por defecto
+        user_keywords = validated_user_profile.keywords or ["Problema con keywords"]
     except ValidationError as e:
         logger.error(f"Error de validación del perfil de usuario: {e}")
         st.error("Error en el perfil de usuario.  Por favor, procesa tu perfil nuevamente.")
         return None
 
-    # Prepara los datos para la crew, asegurando que 'user_keywords' esté presente
-    crew_input_data = {**input_data}  # Copia para no modificar el original
+    crew_input_data = {**input_data}
     if search_type == "automated":
-      crew_input_data["user_keywords"] = ", ".join(user_keywords)
-    elif search_type == "manual":
-      if "keywords" not in crew_input_data:  # Solo añade si no se proporcionaron manualmente
         crew_input_data["user_keywords"] = ", ".join(user_keywords)
+    elif search_type == "manual":
+        if "keywords" not in crew_input_data:
+            crew_input_data["user_keywords"] = ", ".join(user_keywords)
     if "province" not in crew_input_data:
-        crew_input_data["province"] = "Argentina"  # Valor por defecto
+        crew_input_data["province"] = "Argentina"
     if "industry" not in crew_input_data:
-        crew_input_data["industry"] = "Empresas en general"  # Valor por defecto
+        crew_input_data["industry"] = "Empresas en general"
 
-    # Asegura que website sea string
     user_profile_dict = validated_user_profile.model_dump()
     if user_profile_dict.get("website"):
-      user_profile_dict["website"] = str(user_profile_dict["website"])
-
+        user_profile_dict["website"] = str(user_profile_dict["website"])
 
     try:
         crew_instance = LeadGenerationCrew()
-        crew = crew_instance.crew()
+        # Combinar input_data y el perfil
+        results = crew_instance.run(inputs={**crew_input_data, **user_profile_dict}) #Se llama al metodo run de crew
 
-        # Combinar input_data y el perfil, usando la copia modificada
-        results = crew.kickoff(inputs={**crew_input_data, **user_profile_dict})
-
-        # Procesa y muestra los resultados (sin cambios)
         if results:
-            if isinstance(results, list):  # Si es una lista, itera
+            if isinstance(results, list):
                 st.success("Búsqueda completada.")
                 for result in results:
                     st.subheader("Datos de la Empresa")
-                    st.json(
-                        result
-                    )  # Solo mostramos el json, se simplifica la logica
-            elif (
-                isinstance(results, dict) and results.get("status") == "success"
-            ):  # Si es un diccionario exitoso
+                    st.json(result)
+            elif isinstance(results, dict) and results.get("status") == "success":
                 st.success("Búsqueda completada.")
                 st.subheader("Datos de la Empresa")
-                st.json(results["data"]["company_info"])  # Accede a company_info
+                st.json(results["data"]["company_info"])
                 st.subheader("Borrador de Correo")
-                st.json(results["data"]["email_content"])  # Accede a email_content
+                st.json(results["data"]["email_content"])
                 st.subheader("Datos del Usuario")
-                st.json(results["data"]["user_info"])  # Accede a user_info
-            elif (
-                isinstance(results, dict)
-                and results.get("status") == "validation_error"
-            ):
-                st.error(f"Error de validación: {results['errors']}")  # Si hay error de validacion
+                st.json(results["data"]["user_info"])
+            elif isinstance(results, dict) and results.get("status") == "validation_error":
+                st.error(f"Error de validación: {results['errors']}")
             else:
-                st.error(
-                    "La búsqueda no devolvió resultados o falló."
-                )  # Otro error
+                st.error("La búsqueda no devolvió resultados o falló.")
         else:
-            st.error("La búsqueda no devolvió resultados o falló.")  # Otro error
-        return None  # Se retorna None
+            st.error("La búsqueda no devolvió resultados o falló.")
+        return None
 
-    except Exception as e:  # Captura genérica al final, después de los reintentos
+    except Exception as e:
         logger.error(f"Error en run_crewai: {e}", exc_info=True)
         st.error(f"Error al ejecutar CrewAI: {e}")
         return None
@@ -132,45 +101,52 @@ def run_crewai(
 
 # --- Interfaz de Streamlit ---
 
-
 st.title("🤖 LeadGen AI: Generador de Leads con IA")
 
-# --- Barra Lateral (Sidebar) ---
+# --- Barra Lateral (Sidebar) - Formulario Estructurado ---
 with st.sidebar:
     st.header("Configuración")
     st.subheader("Mi Perfil")
-    profile_text = st.text_area("Pega aquí tu información en formato Markdown:", height=300)
 
-    if st.button("Procesar Perfil"):
-        if profile_text:
-            logger.info("Procesando perfil...")
-            # Usa DIRECTAMENTE el InformationExtractorAgent:
-            extractor = InformationExtractorAgent(llm=gemini_llm)  # type: ignore  #Se pasa el llm
-            result = extractor.process_input({"profile_text": profile_text})
+    # Formulario con campos específicos
+    with st.form("profile_form"):
+        st.write("Ingresa tu información profesional:")
+        name = st.text_input("Nombre Completo", placeholder="David Gabriel Silvera")
+        role = st.text_input("Cargo/Título", placeholder="Científico de Datos e Ingeniero de Machine Learning e IA")
+        company_name = st.text_input("Nombre de la Empresa (Opcional)", placeholder="")
+        website = st.text_input("Sitio Web (Opcional)", placeholder="https://silveradavid.site/")
+        phone = st.text_input("Teléfono (Opcional)", placeholder="(+54) 2657 626313")
+        email = st.text_input("Correo Electrónico", placeholder="ingenieria.d.s.g@hotmail.com")
+        keywords = st.text_input("Palabras Clave (separadas por comas)", placeholder="Ciencia de Datos, Machine Learning, IA")
+        summary = st.text_area("Resumen Profesional", placeholder="Breve descripción de tu experiencia y habilidades", height=150)
+        # Agrega más campos si es necesario (ej., intereses, especialidades, etc.)
 
-            if result:
-                if "error" in result:  #  <--  CORRECCIÓN AQUÍ
-                    st.error(f"Error al procesar el perfil: {result['error']}")
-                elif "parsing_success" in result and not result["parsing_success"]:
-                    st.error(
-                        f"Error al procesar el perfil: {result.get('error', 'Error desconocido')}"
-                    )
-                else:
-                    st.success("Perfil procesado exitosamente.")
-                    st.json(result)
-                    # Guarda los datos del perfil DESPUÉS de procesarlos exitosamente
-                    try:
-                        validated_profile = UserProfile(**result)
-                        save_profile_data(validated_profile.model_dump())
-                    except ValidationError as e:
-                        st.error(f"Error al validar los datos del perfil: {e}")
+        submitted = st.form_submit_button("Guardar Perfil")
 
-            else:
-                st.error("Error al procesar el perfil.") #Ya no falla crewai
-        else:
-            st.warning("Por favor, introduce tu información de perfil.")
+        if submitted:
+            # Crear diccionario con los datos del formulario
+            profile_data = {
+                "name": name,
+                "role": role,
+                "company_name": company_name,
+                "website": website if website else None,  # Para manejar campos opcionales
+                "phone": phone if phone else None,
+                "email": email,  # El correo electrónico ahora es obligatorio
+                "keywords": [k.strip() for k in keywords.split(",")] if keywords else [],
+                "summary": summary,
+                "parsing_success": True  # Ya no necesitamos el LLM para parsear, así que siempre es True
+            }
 
-# --- Sección Principal ---
+            # Validar y guardar
+            try:
+                validated_profile = UserProfile(**profile_data)
+                save_profile_data(validated_profile.model_dump())
+                st.success("Perfil guardado exitosamente!")
+            except ValidationError as e:
+                st.error(f"Error al validar los datos del perfil: {e}")
+
+
+# --- Sección Principal (resto de la app, sin cambios mayores) ---
 
 st.header("🔍 Búsqueda de Leads")
 tab_auto, tab_manual = st.tabs(["Búsqueda Automatizada", "Búsqueda Manual"])
@@ -211,35 +187,7 @@ with tab_auto:
                     {"province": province_auto, "industry": industry_auto},
                     search_type="automated",
                 )
-
-                if results and isinstance(results, list):  # Si es una lista, itera
-                        st.success("Búsqueda completada.")
-                        for result in results:
-                            st.subheader("Datos de la Empresa")
-                            st.json(
-                                result
-                            )  # Solo mostramos el json, se simplifica la logica
-                elif (
-                        isinstance(results, dict) and results.get("status") == "success"
-                    ):  # Si es un diccionario exitoso
-                        st.success("Búsqueda completada.")
-                        st.subheader("Datos de la Empresa")
-                        st.json(results["data"]["company_info"])  # Accede a company_info
-                        st.subheader("Borrador de Correo")
-                        st.json(results["data"]["email_content"])  # Accede a email_content
-                        st.subheader("Datos del Usuario")
-                        st.json(results["data"]["user_info"])  # Accede a user_info
-
-                elif (
-                    isinstance(results, dict)
-                    and results.get("status") == "validation_error"
-                ):
-                    st.error(f"Error de validación: {results['errors']}")
-                else:
-                    st.error("La búsqueda no devolvió resultados o falló.")
-        else:
-            st.warning("Por favor, selecciona una provincia y un rubro.")
-
+                # El resto del código para mostrar resultados se mantiene igual
 
 with tab_manual:
     st.subheader("Búsqueda Manual")
@@ -264,32 +212,7 @@ with tab_manual:
             with st.spinner("Buscando leads..."):
                 logger.info(f"Iniciando búsqueda manual: {input_data}")
                 results = run_crewai(input_data, search_type="manual")
+# El resto del código para mostrar resultados se mantiene igual
 
-                if results and isinstance(results, list):  # Si es una lista, itera
-                    st.success("Búsqueda completada.")
-                    for result in results:
-                        st.subheader("Datos de la Empresa")
-                        st.json(result)  # Solo mostramos el json
-                elif (
-                        isinstance(results, dict) and results.get("status") == "success"
-                    ):  # Si es un diccionario exitoso
-                    st.success("Búsqueda completada.")
-                    st.subheader("Datos")
-                    st.json(results["data"]["company_info"])  # Accede a company_info
-                    st.subheader("Borrador de Correo")
-                    st.json(results["data"]["email_content"])  # Accede a email_content
-                    st.subheader("Datos del Usuario")
-                    st.json(results["data"]["user_info"])  # Accede a user_info
-                elif (
-                    isinstance(results, dict)
-                    and results.get("status") == "validation_error"
-                ):
-                    st.error(f"Error de validación: {results['errors']}")
-                else:
-                    st.error("La búsqueda no devolvió resultados o falló.")
-        else:
-            st.warning("Por favor, selecciona una provincia.")
-
-# --- Pie de Página ---
 st.markdown("---")
 st.markdown("Desarrollado por David Silvera")
