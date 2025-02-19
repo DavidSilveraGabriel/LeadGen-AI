@@ -10,8 +10,7 @@ researcher:
       to a wide range of data sources and a keen eye for detail.
     verbose: True
     allow_delegation: False
-    # tools are defined inline in crew.py
-
+ 
 sales_copywriter:
     role: Sales Copywriter
     goal: >
@@ -35,14 +34,4 @@ reporting_analyst:
       validating business intelligence data.
     verbose: True
     allow_delegation: False
-
-information_extractor: #Se configura el information extractor
-    role: Information Extractor
-    goal: >
-      Extract and structure user profile information from raw text input.
-      Ensure data is complete and accurately formatted.
-    backstory: >
-      You are an expert in data extraction and processing, specializing
-      in parsing and structuring information from unstructured text.
-    verbose: True
-    allow_delegation: False
+ 

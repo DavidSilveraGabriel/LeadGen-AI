@@ -1,77 +1,126 @@
-#crew.py
 from crewai import Crew, Task, LLM, Process
-from crewai.project import CrewBase, agent, task
-from agents import (
-    BusinessResearcherAgent,
-    SalesCopywriterAgent,
-    ReportingAnalystAgent,
-)
 from crewai_tools import SerperDevTool, ScrapeWebsiteTool
-from utils import logger
+from utils import logger, load_yaml_config, save_lead, CompanyData, EmailData # Importar para validación
 import os
-from pydantic import BaseModel, Field
+import json
+import datetime
+from pydantic import ValidationError
 
 # Configura el LLM para Gemini
 gemini_llm = LLM(
-    model="gemini/gemini-2.0-flash-exp",  # O el modelo que quieras
+    model="gemini/gemini-2.0-flash-exp",
     api_key=os.environ.get("GEMINI_API_KEY"),
     temperature=0.6,
-) # gemini-2.0-flash-lite-preview-02-05, gemini-2.0-flash-exp, gemini-1.5-pro-latest
+)
 
-@CrewBase
 class LeadGenerationCrew:
     """Crew para la generación de leads."""
 
-    agents_config = "config/agents.yaml"
-    tasks_config = "config/tasks.yaml"
+    agents_config_path = "config/agents.yaml"
+    tasks_config_path = "config/tasks.yaml"
 
-    @agent
+    def __init__(self, config_agents=None, config_tasks=None):
+        self.agents_config = config_agents or load_yaml_config(self.agents_config_path)
+        self.tasks_config = config_tasks or load_yaml_config(self.tasks_config_path)
+        if self.agents_config is None or self.tasks_config is None:
+            raise ValueError("No se pudieron cargar las configuraciones YAML.")
+
+        # Inicialización diferida de agentes y tareas
+        self._business_researcher = None
+        self._sales_copywriter = None
+        self._reporting_analyst = None
+
+        self._research_business_task = None
+        self._create_sales_email_task = None
+        self._create_report_task = None
+
+        self.crew = self._create_crew()
+
+    def _create_crew(self):
+      return Crew(
+          agents=self.agents,
+          tasks=self.tasks,
+          process=Process.sequential,
+          verbose=True
+        )
+
+
+    @property
     def business_researcher(self):
-        return BusinessResearcherAgent(tools=[SerperDevTool(), ScrapeWebsiteTool()], llm=gemini_llm)
+        from crewai import Agent
+        if self._business_researcher is None:
+            self._business_researcher = Agent(config=self.agents_config["researcher"], tools=[SerperDevTool(), ScrapeWebsiteTool()], llm=gemini_llm, verbose=True, allow_delegation=False, max_iter=7, memory=True)
+        return self._business_researcher
 
-    @agent
+    @property
     def sales_copywriter(self):
-        return SalesCopywriterAgent(llm=gemini_llm)
+        from crewai import Agent
+        if self._sales_copywriter is None:
+            self._sales_copywriter = Agent(config=self.agents_config["sales_copywriter"], llm=gemini_llm, verbose=True, allow_delegation=False)
+        return self._sales_copywriter
 
-    @agent
+    @property
     def reporting_analyst(self):
-        return ReportingAnalystAgent(llm=gemini_llm)
+        from crewai import Agent
+        if self._reporting_analyst is None:
+            self._reporting_analyst = Agent(config=self.agents_config["reporting_analyst"], llm=gemini_llm, verbose=True, allow_delegation=False)
+        return self._reporting_analyst
 
-    @task
-    def research_business_task(self):  # AHORA el nombre coincide con el YAML
-        return Task(config=self.tasks_config["research_business_task"], expected_output="Lista de empresas...")
 
-    @task
-    def create_sales_email_task(self):  # AHORA el nombre coincide con el YAML
-        return Task(config=self.tasks_config["create_sales_email_task"], expected_output="Borrador de correo...")
+    @property
+    def research_business_task(self):
+        from crewai import Task
+        if self._research_business_task is None:
+            task_config = self.tasks_config["research_business_task"]
+            self._research_business_task = Task(
+                description=task_config['description'],
+                expected_output=task_config['expected_output'],
+                agent=self.business_researcher
+            )
+        return self._research_business_task
 
-    @task
-    def create_report_task(self):  # AHORA el nombre coincide con el YAML
-        return Task(config=self.tasks_config["create_report_task"], output_file="output/report.md", expected_output="Informe final...")
+    @property
+    def create_sales_email_task(self):
+        from crewai import Task
+        if self._create_sales_email_task is None:
+            task_config = self.tasks_config["create_sales_email_task"]
+            self._create_sales_email_task = Task(
+                description=task_config['description'],
+                expected_output=task_config['expected_output'],
+                agent=self.sales_copywriter,
+                context=[self.research_business_task]
+            )
+        return self._create_sales_email_task
+
+    @property
+    def create_report_task(self):
+        from crewai import Task
+        if self._create_report_task is None:
+            task_config = self.tasks_config["create_report_task"]
+            self._create_report_task = Task(
+                description=task_config['description'],
+                expected_output=task_config['expected_output'],
+                agent=self.reporting_analyst,
+                context=[self.create_sales_email_task],
+                output_file=task_config['output_file'] #Se pasa el parametro directamente a la Tarea.
+            )
+        return self._create_report_task
+
+    @property
+    def agents(self):
+      return [self.business_researcher, self.sales_copywriter, self.reporting_analyst]
+
+    @property
+    def tasks(self):
+      return [self.research_business_task, self.create_sales_email_task, self.create_report_task]
+
 
     def run(self, inputs):
         logger.info("Iniciando LeadGenerationCrew.run con inputs: %s", inputs)
 
-        # Crea las *instancias* de las tareas y agentes
-        research_task_instance = self.research_business_task() #Usamos los metodos
-        email_task_instance = self.create_sales_email_task()
-        report_task_instance = self.create_report_task()
-        researcher_instance = self.business_researcher()
-        copywriter_instance = self.sales_copywriter()
-        analyst_instance = self.reporting_analyst()
-
-
-        # Crea la instancia de Crew
-        crew = Crew(
-            agents=[researcher_instance, copywriter_instance, analyst_instance],
-            tasks=[research_task_instance, email_task_instance, report_task_instance],
-            process=Process.sequential,
-            verbose=True
-        )
-
         # Ejecuta la crew
         try:
-            results = crew.kickoff(inputs=inputs)
+            results = self.crew.kickoff(inputs=inputs)
             logger.info("Crew completada. Resultados: %s", results)
             return results
         except Exception as e:

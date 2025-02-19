@@ -10,6 +10,7 @@ from datetime import datetime
 import functools
 import time
 import re
+import yaml
 
 # --- Configuración de Logging ---
 def setup_logger(name):
@@ -199,7 +200,23 @@ def load_profile_data(filename: str = "profile_data.json") -> Optional[Dict[str,
         logger.warning(f"Archivo de perfil no encontrado: {filepath}")
         return None
 
-
+def load_yaml_config(filepath: str) -> Optional[Dict[str, Any]]:
+    """Carga un archivo YAML y lo devuelve como un diccionario."""
+    logger.debug(f"Cargando configuración YAML desde: {filepath}")
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+            logger.debug(f"YAML cargado: {config}")  # Imprime el contenido!
+            return config
+    except FileNotFoundError:
+        logger.error(f"Archivo YAML no encontrado: {filepath}")
+        return None
+    except yaml.YAMLError as e:
+        logger.error(f"Error al parsear YAML: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Error inesperado al cargar YAML: {e}", exc_info=True)
+        return None
 # --- Funciones de Prompting (NUEVAS) ---
  
 
