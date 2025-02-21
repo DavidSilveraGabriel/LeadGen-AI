@@ -257,34 +257,27 @@ def build_email_prompt(company_data: Dict[str, Any], user_profile: Dict[str, Any
     return prompt
  
 
-
 def build_research_prompt(search_data: Dict[str, Any], user_profile: Dict[str, Any]) -> str:
-    """Construye el prompt para la búsqueda, específico para Serper."""
+    """Construye el prompt para analizar el contenido de URLs."""
     logger.debug("INICIO de build_research_prompt")
 
-    industry = search_data.get('industry', 'empresas')
-    province = search_data.get('province', 'Argentina')
     keywords = ", ".join(user_profile.get('keywords', []))
+    company_urls = search_data.get('company_urls', []) # Obtener las URLs del input
 
     prompt = (
-        f"Encuentra sitios web de {industry} en {province}, Argentina, "
-        f"que mencionen explícitamente la necesidad o el uso de servicios relacionados con: {keywords}. "
-        f"Prioriza resultados que indiquen una necesidad activa de estos servicios."
+        f"Analyze the content of the following URLs to identify companies that could be potential leads:\n"
+        f"{chr(10).join(company_urls)}\n\n" # Unir URLs con saltos de línea para mejor legibilidad en el prompt
+        f"Focus on identifying companies that could benefit from services related to: {keywords}.\n"
+        f"For each company identified, extract the following information:\n"
+        f"- Company Name\n"
+        f"- Website URL (if available on the page or linked from it)\n"
+        f"- Brief Description of the company and its activities (based on the page content)\n"
+        f"- Contact Information (email, phone, social media links, if available on the page or linked from it)\n\n"
+        f"Prioritize companies that explicitly mention a need for services related to {keywords} or whose activities strongly suggest they could benefit from such services, based on the content of these URLs.\n"
+        f"Output the information for each company in a structured format (e.g., JSON or a list of dictionaries)."
     )
-    #Agregados
-    if search_data.get('company_name'):
-      prompt += f" Considera especialmente si el nombre de la empresa es {search_data.get('company_name')}"
-    if search_data.get('company_size'):
-        prompt += f" Considera empresas de tamaño: {search_data.get('company_size')}."
-    if search_data.get('revenue'):
-        prompt += f" Considera empresas con facturación anual en el rango: {search_data.get('revenue')}."
-    if search_data.get('location'):
-        prompt += f" La empresa debe estar localizada, o tener sede/oficina en: {search_data.get('location')}."
-    if search_data.get('technologies'):
-        techs = ", ".join(search_data.get('technologies'))
-        prompt += f" Considera si la empresa utiliza, o menciona explicitamente las siguientes tecnologias: {techs}."
-    if search_data.get('needs'):
-      prompt += f" Busca empresas que tengan las siguientes necesidades: {search_data.get('needs')}."
+
+    # Ya no necesitamos las condiciones de provincia, industria, etc., porque estamos analizando URLs específicas.
 
     logger.debug(f"PROMPT-->{prompt}")
     logger.debug("FIN de build_research_prompt")

@@ -1,3 +1,5 @@
+#app.py
+
 import streamlit as st
 from crewai import LLM
 from crew import LeadGenerationCrew
@@ -137,77 +139,36 @@ st.header("🔍 Búsqueda de Leads")
 st.subheader("Búsqueda de Leads")
 
 # Campos de entrada, combinando lo mejor de ambos formularios
-province = st.selectbox(
-    "Provincia:",
-    ["Buenos Aires", "Córdoba", "Santa Fe", "Mendoza", "Tucumán", "Otra"],
-    key="province",
+# Eliminamos provincia e industria, agregamos URLs
+company_urls_input = st.text_area(
+    "URLs de Empresas (Máximo 3, una por línea):",
+    placeholder="https://www.ejemplo-empresa1.com\nhttps://www.ejemplo-empresa2.com\nhttps://www.ejemplo-empresa3.com",
+    height=100,
+    key="company_urls_input"
 )
-if province == "Otra":
-    province = st.text_input("Escribe la provincia:", key="province_text")
 
-industry = st.selectbox(
-    "Rubro/Industria:",
-    [
-        "Agencias de Marketing Digital",
-        "Tiendas Online (e-commerce)",
-        "Empresas de Software/SaaS",
-        "Consultoras",
-        "Startups",
-        "Servicios Financieros (pequeños)",
-        "Educación",
-        "Salud",
-        "Servicios Profesionales",
-        "Otro",
-    ],
-    key="industry",
-)
-if industry == "Otro":
-    industry = st.text_input("Escribe el rubro:", key="industry_text")
-
-
-company_name = st.text_input("Nombre de la Empresa (Opcional):", key="company_name")
-# Palabras clave ESPECÍFICAS del lead. Se agregan a las del usuario.
 lead_keywords = st.text_input("Palabras Clave Adicionales del Lead (Opcional, separadas por comas):", key="lead_keywords")
-
-company_size = st.selectbox(
-    "Tamaño de la Empresa (Opcional):",
-    ["", "Pequeña (1-50 empleados)", "Mediana (51-200 empleados)", "Grande (201+ empleados)"],
-    key="company_size"
-)
-
-revenue = st.selectbox(
-    "Facturación Anual (Opcional):",
-    ["", "Menos de $1M", "$1M - $10M", "Más de $10M"],
-    key="revenue"
-)
-location = st.text_input("Localización Específica (Opcional):", key="location")
-
-technologies = st.text_input("Tecnologías que Utiliza (Opcional, separadas por comas):", key="technologies")
-
-needs = st.text_area("Necesidades Específicas del Lead (Opcional):", key="needs", height=100)
 
 
 # Botón de búsqueda
 if st.button("Buscar Leads"):
-    input_data = {"province": province, "industry": industry}
-    if company_name:
-        input_data["company_name"] = company_name
-    if lead_keywords:
-      input_data["keywords"] = [k.strip() for k in lead_keywords.split(",")]
-    if company_size:
-        input_data["company_size"] = company_size
-    if revenue:
-        input_data["revenue"] = revenue
-    if location:
-        input_data["location"] = location
-    if technologies:
-       input_data["technologies"] = [t.strip() for t in technologies.split(",")]
-    if needs:
-        input_data["needs"] = needs
+    # Procesar las URLs ingresadas por el usuario
+    company_urls = [url.strip() for url in company_urls_input.strip().split('\n') if url.strip()]
 
-    with st.spinner("Buscando leads..."):
-        logger.info(f"Iniciando búsqueda con: {input_data}")
-        results = run_crewai(input_data)
+    # Validar que no se excedan 3 URLs (opcional, pero buena práctica)
+    if len(company_urls) > 3:
+        st.error("Por favor, ingresa un máximo de 3 URLs.")
+    elif not company_urls: # Validar que al menos haya una URL
+        st.error("Por favor, ingresa al menos una URL.")
+    else:
+        input_data = {"company_urls": company_urls} # Pasamos las URLs como 'company_urls'
+        if lead_keywords:
+          input_data["keywords"] = [k.strip() for k in lead_keywords.split(",")]
+
+
+        with st.spinner("Buscando leads..."):
+            logger.info(f"Iniciando búsqueda con URLs: {company_urls}")
+            results = run_crewai(input_data)
 
 
 st.markdown("---")

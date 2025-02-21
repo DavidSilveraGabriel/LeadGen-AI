@@ -1,5 +1,5 @@
 from crewai import Crew, Task, LLM, Process
-from crewai_tools import SerperDevTool, ScrapeWebsiteTool
+from crewai_tools import ScrapeWebsiteTool # Solo importamos ScrapeWebsiteTool
 from utils import logger, load_yaml_config, save_lead, CompanyData, EmailData # Importar para validación
 import os
 import json
@@ -49,7 +49,8 @@ class LeadGenerationCrew:
     def business_researcher(self):
         from crewai import Agent
         if self._business_researcher is None:
-            self._business_researcher = Agent(config=self.agents_config["researcher"], tools=[SerperDevTool(), ScrapeWebsiteTool()], llm=gemini_llm, verbose=True, allow_delegation=False, max_iter=7, memory=True)
+            # Solo ScrapeWebsiteTool, quitamos SerperDevTool
+            self._business_researcher = Agent(config=self.agents_config["researcher"], tools=[ScrapeWebsiteTool()], llm=gemini_llm, verbose=True, allow_delegation=False, max_iter=7, memory=True)
         return self._business_researcher
 
     @property
