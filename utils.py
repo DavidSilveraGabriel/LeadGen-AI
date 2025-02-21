@@ -222,7 +222,7 @@ def load_yaml_config(filepath: str) -> Optional[Dict[str, Any]]:
 
 def build_email_prompt(company_data: Dict[str, Any], user_profile: Dict[str, Any]) -> str:
     """Construye el prompt para el correo, MUCHO más específico."""
-    user_name = user_profile.get('name', 'Representante de Ventas')
+    user_name = user_profile.get('name', 'Representante de Ventas') # Usar datos del perfil!
     user_company = user_profile.get('company_name', 'Nuestra Empresa')
     user_role = user_profile.get('role', 'Representante de Ventas')
     user_website = user_profile.get('website', 'No Disponible')
@@ -238,14 +238,14 @@ def build_email_prompt(company_data: Dict[str, Any], user_profile: Dict[str, Any
         f"Escribe un correo electrónico de ventas altamente personalizado para {company_name}, "
         f"una empresa en el rubro de {company_industry} ubicada en {company_province}.\n\n"
         f"Información sobre {company_name}:\n{company_about}\n\n"
-        f"Debes presentarte como {user_name} de {user_company}, {user_role}.\n"
-        f"Tu sitio web es {user_website}.\n"
-        f"Tus áreas de especialización son: {user_keywords}.\n"
-        f"Breve descripción de tu experiencia: {user_summary}\n\n"
+        f"Debes presentarte como **{user_name}** de **{user_company}**, **{user_role}**.\n" # Usar datos del perfil!
+        f"Mi sitio web es {user_website}.\n"
+        f"Mis áreas de especialización son: {user_keywords}.\n"
+        f"Breve descripción de mi experiencia: {user_summary}\n\n"
         f"El objetivo del correo es iniciar una conversación y programar una breve reunión "
-        f"para discutir cómo tus habilidades/servicios pueden *específicamente* ayudar a {company_name} "
+        f"para discutir cómo mis habilidades/servicios pueden *específicamente* ayudar a {company_name} "
         f"a resolver sus desafíos o aprovechar oportunidades en su rubro.\n\n"
-        f"Debes *conectar* la información sobre {company_name} con tus habilidades/servicios. "
+        f"Debes *conectar* la información sobre {company_name} con mis habilidades/servicios. "
         f"Por ejemplo, si la descripción de la empresa menciona un enfoque en 'SEO', y tú tienes "
         f"experiencia en 'generación de contenido con IA', debes mencionar cómo puedes ayudarles "
         f"a mejorar su SEO con contenido de alta calidad.\n\n"

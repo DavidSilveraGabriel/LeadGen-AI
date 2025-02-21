@@ -89,7 +89,7 @@ class LeadGenerationCrew:
                 description=task_config['description'],
                 expected_output=task_config['expected_output'],
                 agent=self.sales_copywriter,
-                context=[self.research_business_task]
+                context=[self.research_business_task] # <--- Contexto correcto
             )
         return self._create_sales_email_task
 
@@ -103,7 +103,9 @@ class LeadGenerationCrew:
                 expected_output=task_config['expected_output'],
                 agent=self.reporting_analyst,
                 context=[self.create_sales_email_task],
-                output_file=task_config['output_file'] #Se pasa el parametro directamente a la Tarea.
+                output_file=task_config['output_file'], #Se pasa el parametro directamente a la Tarea.
+                inputs={"report_date": datetime.datetime.now().strftime("%Y-%m-%d"), # <--- Fecha actual
+                        "report_timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} # <--- Timestamp actual
             )
         return self._create_report_task
 

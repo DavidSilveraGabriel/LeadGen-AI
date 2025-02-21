@@ -56,7 +56,7 @@ def run_crewai(input_data: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
         crew_instance = LeadGenerationCrew()
         # Combinar input_data y el perfil
         results = crew_instance.run(inputs={**crew_input_data, **user_profile_dict})
-
+        
         if results:
             if isinstance(results, list):
                 st.success("Búsqueda completada.")
