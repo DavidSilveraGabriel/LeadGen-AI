@@ -12,8 +12,7 @@ research_business_task:
     URLs to analyze: {company_urls} # Input URLs
 
   expected_output: >
-    A list of dictionaries, where each dictionary contains validated and enriched data
-    for a single company identified within the provided URLs, including its name, contact information,
+    A list of dictionaries, where each dictionary contains validated and enriched data for a single company identified within the provided URLs, including its name, contact information,
     brief description, and website (if found). Indicate if the information was extracted from the given URL or linked from it.
   agent: business_researcher
 
